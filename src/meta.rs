@@ -14,14 +14,49 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use hyper::{Body, Response};
+use std::collections::HashMap;
 
-use crate::{make_error, RequestContext, require_login};
+use hyper::{Body, Response};
+use serde::Serialize;
+
+use crate::{global_application_config, make_error, require_login, RequestContext};
 
 pub const BUILD_VERSION: &str = env!("GIT_HASH");
 
+#[derive(Serialize)]
+struct Stats {
+    request_total: HashMap<String, u64>,
+}
 
-pub async fn respond_to_meta(req: RequestContext, meta_path: &str) -> anyhow::Result<Response<Body>> {
+async fn respond_to_statistics(mut req: RequestContext) -> anyhow::Result<Response<Body>> {
+    let mut pipe = redis::pipe();
+    for rule in &global_application_config.rules {
+        pipe.get(rule.accumulated_statistics_key());
+    }
+    let response = req
+        .redis_client
+        .send_packed_commands(&pipe, 0, global_application_config.rules.len())
+        .await?;
+    let mut request_total = HashMap::new();
+    for (value, rule) in response.iter().zip(global_application_config.rules.iter()) {
+        let calls = if let redis::Value::Int(val) = value {
+            *val
+        } else if value == &redis::Value::Nil {
+            0
+        } else {
+            return make_error(500, "Invalid redis response");
+        };
+        request_total.insert(rule.http_path.clone(), calls as u64);
+    }
+    return Ok(Response::builder()
+        .header("content-type", "application/json")
+        .body(serde_json::to_string(&Stats { request_total })?.into())?);
+}
+
+pub async fn respond_to_meta(
+    req: RequestContext,
+    meta_path: &str,
+) -> anyhow::Result<Response<Body>> {
     if meta_path == "version" {
         return Ok(Response::builder()
             .status(200)
@@ -32,13 +67,17 @@ pub async fn respond_to_meta(req: RequestContext, meta_path: &str) -> anyhow::Re
         Response::builder()
             .status(200)
             .body(format!("{principal:#?}").into())?
+    } else if meta_path == "stats" {
+        respond_to_statistics(req).await?
     } else {
         make_error(404, format!("Unknown meta request {meta_path}").as_str())?
     };
     save.save_to(response)
 }
 
-
 pub fn debug_string() -> String {
-    format!("ursa-minor {} https://github.com/NotEnoughUpdates/ursa-minor/", BUILD_VERSION)
+    format!(
+        "ursa-minor {} https://github.com/NotEnoughUpdates/ursa-minor/",
+        BUILD_VERSION
+    )
 }
