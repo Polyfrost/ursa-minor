@@ -5,7 +5,7 @@ WORKDIR /usr/src/ursa-minor
 
 RUN apk add --no-cache g++ git
 
-COPY repo /usr/src/ursa-minor/
+COPY . /usr/src/ursa-minor/
 RUN cargo build --release
 
 # Runner
