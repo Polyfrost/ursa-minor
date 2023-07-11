@@ -22,6 +22,7 @@ extern crate core;
 use std::env;
 use std::net::SocketAddr;
 use std::time::Duration;
+use std::str::FromStr;
 
 use anyhow::Context as _;
 use hmac::digest::KeyInit;
@@ -29,7 +30,7 @@ use hmac::Hmac;
 use hyper::{Body, Client, Request, Response, Server};
 use hyper::client::HttpConnector;
 use hyper::service::{make_service_fn, service_fn};
-use hyper_tls::HttpsConnector;
+use hyper_rustls::HttpsConnector;
 
 use crate::hypixel::Rule;
 use crate::meta::respond_to_meta;
@@ -50,7 +51,7 @@ pub struct RequestContext {
 pub struct GlobalApplicationContext {
     client: Client<HttpsConnector<HttpConnector>>,
     hypixel_token: Obscure<String>,
-    port: u16,
+    host: SocketAddr,
     rules: Vec<Rule>,
     allow_anonymous: bool,
     // Use sha384 to prevent against length extension attacks
@@ -131,21 +132,24 @@ fn init_config() -> anyhow::Result<GlobalApplicationContext> {
                 })
         })
         .collect::<Result<Vec<Rule>, _>>()?;
-    let port = config_var("PORT")?
-        .parse::<u16>()
-        .with_context(|| "Could not parse port at URSA_PORT")?;
+    let host = SocketAddr::from_str(&config_var("HOST")?)
+        .with_context(|| "Could not parse host at URSA_HOST")?;
     let token_lifespan = config_var("TOKEN_LIFESPAN")
         .unwrap_or("3600".to_owned())
         .parse::<u64>().with_context(|| "Could not parse token lifespan at URSA_TOKEN_LIFESPAN")?;
     let secret = config_var("SECRET")?;
-    let https = HttpsConnector::new();
+    let https = hyper_rustls::HttpsConnectorBuilder::new()
+        .with_native_roots()
+        .https_only()
+        .enable_http1()
+        .build();
     let client = Client::builder().build::<_, Body>(https);
     let redis_url = config_var("REDIS_URL")?;
     let rate_limit_lifespan = Duration::from_secs(config_var("RATE_LIMIT_TIMEOUT")?.parse::<u64>()?);
     let rate_limit_bucket = config_var("RATE_LIMIT_BUCKET")?.parse::<u64>()?;
     Ok(GlobalApplicationContext {
         client,
-        port,
+        host,
         hypixel_token: Obscure(hypixel_token),
         rules,
         allow_anonymous,
@@ -168,7 +172,6 @@ async fn main() -> anyhow::Result<()> {
         "Launching with configuration: {:#?}",
         *global_application_config
     );
-    let addr = SocketAddr::from(([127, 0, 0, 1], global_application_config.port));
     let redis_client = redis::Client::open(global_application_config.redis_url.clone())?;
     let managed = redis::aio::ConnectionManager::new(redis_client).await?;
     let service = make_service_fn(|_conn| {
@@ -182,8 +185,8 @@ async fn main() -> anyhow::Result<()> {
             }))
         }
     });
-    let server = Server::bind(&addr).serve(service);
-    println!("Now listening at {}", addr);
+    let server = Server::bind(&global_application_config.host).serve(service);
+    println!("Now listening at {}", global_application_config.host);
     let mut s = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     tokio::select! {
         _ = s.recv() => {

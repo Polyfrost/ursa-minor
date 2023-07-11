@@ -8,12 +8,12 @@ edition = "2021"
 [dependencies.dotenv]
 version = "*"
 
-[dependencies.hyper-tls]
-version = "*"
-
 [dependencies.hyper]
 version = "*"
 features = ["full"]
+
+[dependencies.hyper-rustls]
+version = "*"
 
 [dependencies.serde]
 version = "*"

@@ -1,3 +1,10 @@
+# Changes from upstream
+
+- Hyper now uses rustls (mainly because it is easier than dealing with dynamically linked openssl)
+- Allows a custom listen address rather than only 172.0.0.1
+  - More specifically, the environment variable `PORT` was replaced with `HOST` in the form of `IP:PORT`
+- `+polyfrost` was added to the end of the version string
+
 # Ursa Minor
 
 > <i>The small bear - A rather primitive API proxy for the Hypixel public API.</i>
