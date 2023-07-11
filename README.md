@@ -4,6 +4,7 @@
 - Allows a custom listen address rather than only 172.0.0.1
   - More specifically, the environment variable `PORT` was replaced with `HOST` in the form of `IP:PORT`
 - `+polyfrost` was added to the end of the version string
+- Added the dockerfile that polyfrost uses (could be improved, but it works for now)
 
 # Ursa Minor
 
