@@ -64,7 +64,7 @@ request.header("x-ursa-token", tokenFromLastRequest);
   // The path that is being proxied
   "hypixel-path": "https://api.hypixel.net/player",
   // A list of query arguments that the Hypixel API endpoint needs. Users provide these in the same order they occur
-  // in here as subpaths. In this case a full request would be http://ursa.notenoughupdates.org/v1/hypixel/<uuid>
+  // in here as subpaths. In this case a full request would be https://example.com/v1/hypixel/player/<uuid>
   // This is to make caching by just path possible.
   "query-arguments": [
     "uuid"

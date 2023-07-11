@@ -60,6 +60,7 @@ pub struct GlobalApplicationContext {
     default_token_duration: Duration,
     rate_limit_lifespan: Duration,
     rate_limit_bucket: u64,
+    git_url: String,
 }
 
 fn make_error(status_code: u16, error_text: &str) -> anyhow::Result<Response<Body>> {
@@ -73,7 +74,7 @@ async fn respond_to(mut context: RequestContext) -> anyhow::Result<Response<Body
     if path == "/" {
         return Ok(Response::builder()
             .status(302)
-            .header("Location", "https://github.com/NotEnoughUpdates/ursa-minor")
+            .header("Location", &global_application_config.git_url)
             .body(Body::empty())?);
     }
     if let Some(meta_path) = path.strip_prefix("/_meta/") {
@@ -149,6 +150,7 @@ fn init_config() -> anyhow::Result<GlobalApplicationContext> {
     let rate_limit_lifespan =
         Duration::from_secs(config_var("RATE_LIMIT_TIMEOUT")?.parse::<u64>()?);
     let rate_limit_bucket = config_var("RATE_LIMIT_BUCKET")?.parse::<u64>()?;
+    let git_url = config_var("GIT_URL")?;
     Ok(GlobalApplicationContext {
         client,
         host,
@@ -160,6 +162,7 @@ fn init_config() -> anyhow::Result<GlobalApplicationContext> {
         default_token_duration: Duration::from_secs(token_lifespan),
         rate_limit_lifespan,
         rate_limit_bucket,
+        git_url
     })
 }
 

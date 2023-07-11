@@ -77,7 +77,8 @@ pub async fn respond_to_meta(
 
 pub fn debug_string() -> String {
     format!(
-        "ursa-minor {} https://github.com/NotEnoughUpdates/ursa-minor/",
-        BUILD_VERSION
+        "ursa-minor {} {}",
+        BUILD_VERSION,
+        global_application_config.git_url
     )
 }
