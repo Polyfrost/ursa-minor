@@ -29,8 +29,10 @@ use hmac::digest::KeyInit;
 use hmac::Hmac;
 use hyper::client::HttpConnector;
 use hyper::service::{make_service_fn, service_fn};
-use hyper_rustls::HttpsConnector;
+use hyper_rustls::{HttpsConnector, ConfigBuilderExt};
 use hyper::{Body, Client, Request, Response, Server};
+use rustls::ClientConfig;
+use rustls::client::Resumption;
 
 use crate::hypixel::Rule;
 use crate::meta::respond_to_meta;
@@ -141,10 +143,18 @@ fn init_config() -> anyhow::Result<GlobalApplicationContext> {
         .with_context(|| "Could not parse token lifespan at URSA_TOKEN_LIFESPAN")?;
     let secret = config_var("SECRET")?;
     let https = hyper_rustls::HttpsConnectorBuilder::new()
-        .with_native_roots()
+        .with_tls_config({
+            let mut cfg = ClientConfig::builder()
+                .with_safe_defaults()
+                .with_native_roots()
+                .with_no_client_auth();
+            cfg.resumption = Resumption::disabled();
+            cfg
+        })
         .https_only()
         .enable_http1()
         .build();
+
     let client = Client::builder().build::<_, Body>(https);
     let redis_url = config_var("REDIS_URL")?;
     let rate_limit_lifespan =
