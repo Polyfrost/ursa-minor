@@ -16,6 +16,7 @@ built = "0.7.7"
 base64 = "0.22.1"
 chrono = "0.4.40"
 futures = "0.3.31"
+prometheus = { version = "0.14.0", features = ["process"] }
 simdnbt = "0.7.1"
 tokio-util = "0.7.14"
 tracing = "0.1.41"

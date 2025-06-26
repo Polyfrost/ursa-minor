@@ -38,12 +38,6 @@ pub struct Rule {
     // TODO: filters
 }
 
-impl Rule {
-    pub fn accumulated_statistics_key(&self) -> String {
-        format!("hypixel:accumulated:{}", self.http_path)
-    }
-}
-
 pub async fn respond_to(
     context: &mut RequestContext,
     path: &str,
@@ -84,7 +78,7 @@ pub async fn respond_to(
                 diagnostics_key.push_str(part);
             }
             let bucket = principal.ratelimit_key();
-            let resp: ((), (), u64, ()) = Pipeline::new()
+            let resp: ((), (), u64) = Pipeline::new()
                 .zincr(
                     format!("hypixel:request:{}", rule.http_path),
                     diagnostics_key,
@@ -95,9 +89,12 @@ pub async fn respond_to(
                 .arg(global_application_config.rate_limit_lifespan.as_secs())
                 .arg("NX")
                 .incr(&bucket, 1)
-                .incr(rule.accumulated_statistics_key(), 1)
                 .query_async(&mut context.redis_client.0)
                 .await?;
+            global_application_config.prometheus.requests.with_label_values(&[
+                &rule.http_path,
+                &rule.hypixel_path
+            ]).inc();
             let bucket_usage = resp.2;
             if bucket_usage > global_application_config.rate_limit_bucket
                 && !global_application_config.allow_anonymous

@@ -14,33 +14,20 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::collections::HashMap;
-
 use hyper::{Body, Response};
-use serde::Serialize;
+use prometheus::{Encoder, TextEncoder};
 
 use crate::{global_application_config, make_error, require_login, RequestContext};
 
 pub const BUILD_VERSION: &str = env!("GIT_HASH");
 
-#[derive(Serialize)]
-struct Stats {
-    request_total: HashMap<String, u64>,
-}
+async fn respond_to_metrics() -> anyhow::Result<Response<Body>> {
+    let encoder = TextEncoder::new();
+    let metrics = global_application_config.prometheus.registry.gather();
 
-async fn respond_to_statistics(mut req: RequestContext) -> anyhow::Result<Response<Body>> {
-    let mut pipe = redis::pipe();
-    for rule in &global_application_config.rules {
-        pipe.get(rule.accumulated_statistics_key());
-    }
-    let response: Vec<Option<u64>> = pipe.query_async(&mut req.redis_client.0).await?;
-    let mut request_total = HashMap::new();
-    for (value, rule) in response.iter().zip(global_application_config.rules.iter()) {
-        request_total.insert(rule.http_path.clone(), value.unwrap_or(0));
-    }
     return Ok(Response::builder()
-        .header("content-type", "application/json")
-        .body(serde_json::to_string(&Stats { request_total })?.into())?);
+        .header("content-type", encoder.format_type())
+        .body(encoder.encode_to_string(&metrics)?.into())?);
 }
 
 pub async fn respond_to_meta(
@@ -57,8 +44,8 @@ pub async fn respond_to_meta(
         Response::builder()
             .status(200)
             .body(format!("{principal:#?}").into())?
-    } else if meta_path == "stats" {
-        respond_to_statistics(req).await?
+    } else if meta_path == "metrics" {
+        respond_to_metrics().await?
     } else {
         make_error(404, format!("Unknown meta request {meta_path}").as_str())?
     };

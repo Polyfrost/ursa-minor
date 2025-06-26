@@ -20,6 +20,7 @@
 #![allow(incomplete_features)]
 extern crate core;
 
+use std::collections::HashMap;
 use std::env;
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr as _;
@@ -37,6 +38,7 @@ use hyper::client::HttpConnector;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Client, Request, Response, Server};
 use hyper_tls::HttpsConnector;
+use prometheus::{IntCounterVec, Opts, Registry};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
@@ -65,6 +67,12 @@ pub struct RequestContext {
 }
 
 #[derive(Debug)]
+pub struct PrometheusContext {
+    registry: Registry,
+    requests: IntCounterVec
+}
+
+#[derive(Debug)]
 pub struct GlobalApplicationContext {
     client: Client<HttpsConnector<HttpConnector>>,
     hypixel_token: Obscure<String>,
@@ -80,6 +88,7 @@ pub struct GlobalApplicationContext {
     rate_limit_bucket: u64,
     #[cfg(feature = "influxdb")]
     influx_url: String,
+    prometheus: PrometheusContext,
 }
 
 fn make_error(status_code: u16, error_text: &str) -> anyhow::Result<Response<Body>> {
@@ -162,6 +171,21 @@ fn config_var(name: &str) -> anyhow::Result<String> {
 static global_application_config: std::sync::LazyLock<GlobalApplicationContext> =
     std::sync::LazyLock::new(|| init_config().unwrap());
 
+fn init_prometheus() -> anyhow::Result<PrometheusContext> {
+    let registry = Registry::new_custom(Some("ursa_minor_".to_owned()), None)?;
+
+    let requests = IntCounterVec::new(
+        Opts::new(
+            "total_requests",
+            "the total amount of requests handled since start",
+        ),
+        &["http_path", "hypixel_path"]
+    )?;
+    registry.register(Box::new(requests.clone()))?;
+
+    Ok(PrometheusContext { registry, requests })
+}
+
 fn init_config() -> anyhow::Result<GlobalApplicationContext> {
     let hypixel_token = config_var("HYPIXEL_TOKEN")?;
     let allow_anonymous = config_var("ANONYMOUS").unwrap_or("false".to_owned()) == "true";
@@ -193,6 +217,7 @@ fn init_config() -> anyhow::Result<GlobalApplicationContext> {
     let rate_limit_lifespan =
         Duration::from_secs(config_var("RATE_LIMIT_TIMEOUT")?.parse::<u64>()?);
     let rate_limit_bucket = config_var("RATE_LIMIT_BUCKET")?.parse::<u64>()?;
+    let prometheus = init_prometheus()?;
     Ok(GlobalApplicationContext {
         client,
         address,
@@ -207,6 +232,7 @@ fn init_config() -> anyhow::Result<GlobalApplicationContext> {
         rate_limit_bucket,
         #[cfg(feature = "influxdb")]
         influx_url,
+        prometheus
     })
 }
 
