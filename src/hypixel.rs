@@ -91,10 +91,11 @@ pub async fn respond_to(
                 .incr(&bucket, 1)
                 .query_async(&mut context.redis_client.0)
                 .await?;
-            global_application_config.prometheus.requests.with_label_values(&[
-                &rule.http_path,
-                &rule.hypixel_path
-            ]).inc();
+            global_application_config
+                .prometheus
+                .requests
+                .with_label_values(&[&rule.http_path, &rule.hypixel_path])
+                .inc();
             let bucket_usage = resp.2;
             if bucket_usage > global_application_config.rate_limit_bucket
                 && !global_application_config.allow_anonymous

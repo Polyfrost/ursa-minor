@@ -16,6 +16,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #![feature(lazy_cell)]
+#![feature(let_chains)]
 #![feature(adt_const_params)]
 #![allow(incomplete_features)]
 extern crate core;
@@ -70,7 +71,7 @@ pub struct RequestContext {
 #[derive(Debug)]
 pub struct PrometheusContext {
     registry: Registry,
-    requests: IntCounterVec
+    requests: IntCounterVec,
 }
 
 #[derive(Debug)]
@@ -89,6 +90,7 @@ pub struct GlobalApplicationContext {
     rate_limit_bucket: u64,
     #[cfg(feature = "influxdb")]
     influx_url: String,
+    metrics_bearer_token: Option<String>,
     prometheus: PrometheusContext,
 }
 
@@ -180,7 +182,7 @@ fn init_prometheus() -> anyhow::Result<PrometheusContext> {
             "total_requests",
             "the total amount of requests handled since start",
         ),
-        &["http_path", "hypixel_path"]
+        &["http_path", "hypixel_path"],
     )?;
     registry.register(Box::new(requests.clone()))?;
 
@@ -221,6 +223,10 @@ fn init_config() -> anyhow::Result<GlobalApplicationContext> {
     let rate_limit_lifespan =
         Duration::from_secs(config_var("RATE_LIMIT_TIMEOUT")?.parse::<u64>()?);
     let rate_limit_bucket = config_var("RATE_LIMIT_BUCKET")?.parse::<u64>()?;
+    let metrics_bearer_token =
+        config_var("METRICS_BEARER_TOKEN")
+            .ok()
+            .and_then(|val| if val == "" { None } else { Some(val) });
     let prometheus = init_prometheus()?;
     Ok(GlobalApplicationContext {
         client,
@@ -236,7 +242,8 @@ fn init_config() -> anyhow::Result<GlobalApplicationContext> {
         rate_limit_bucket,
         #[cfg(feature = "influxdb")]
         influx_url,
-        prometheus
+        metrics_bearer_token,
+        prometheus,
     })
 }
 
