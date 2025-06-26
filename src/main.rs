@@ -38,6 +38,7 @@ use hyper::client::HttpConnector;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Client, Request, Response, Server};
 use hyper_tls::HttpsConnector;
+use prometheus::process_collector::ProcessCollector;
 use prometheus::{IntCounterVec, Opts, Registry};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
@@ -182,6 +183,9 @@ fn init_prometheus() -> anyhow::Result<PrometheusContext> {
         &["http_path", "hypixel_path"]
     )?;
     registry.register(Box::new(requests.clone()))?;
+
+    let process = ProcessCollector::for_self();
+    registry.register(Box::new(process))?;
 
     Ok(PrometheusContext { registry, requests })
 }
